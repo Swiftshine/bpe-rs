@@ -3,7 +3,7 @@ pub mod bpe {
 
     /// Adapted from Philip Gage's `expand` function.
     /// 
-    /// 1996 Philip Gage
+    /// 1994 Philip Gage
     pub fn decode(input: &[u8], stack_size: usize) -> Vec<u8> {
         let mut left = [0u8; 256];
         let mut right = [0u8; 256];
