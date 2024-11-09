@@ -7,14 +7,14 @@ pub mod bpe {
     /// 
     /// 1994 Philip Gage
     pub fn decode(input: &[u8], stack_size: usize) -> Vec<u8> {
-        let mut seeker = Cursor::new(input);
+        let mut input = Cursor::new(input);
         
         let mut left = [0u8; 256];
         let mut right = [0u8; 256];
         let mut stack = vec![0u8; stack_size];
         let mut output = Vec::new();
     
-        while seeker.position() < seeker.get_ref().len() as u64 {
+        while input.position() < input.get_ref().len() as u64 {
             // set left to itself as literal flag
             for i in 0..256 {
                 left[i] = i as u8;
@@ -23,8 +23,8 @@ pub mod bpe {
             // read pair table
             let mut c = 0;
             while c < 256 {
-                let mut count = seeker.get_ref()[seeker.position() as usize] as i16;
-                let _ = seeker.seek_relative(1);
+                let mut count = input.get_ref()[input.position() as usize] as i16;
+                let _ = input.seek_relative(1);
     
                 // skip range of literal bytes
                 if count > 127 {
@@ -37,12 +37,12 @@ pub mod bpe {
     
                 // read pairs, skip right if literal
                 for _ in 0..=count {
-                    left[c as usize] = seeker.get_ref()[seeker.position() as usize];
-                    let _ = seeker.seek_relative(1);
+                    left[c as usize] = input.get_ref()[input.position() as usize];
+                    let _ = input.seek_relative(1);
 
                     if c != left[c as usize] as i16 {
-                        right[c as usize] = seeker.get_ref()[seeker.position() as usize];
-                        let _ = seeker.seek_relative(1);
+                        right[c as usize] = input.get_ref()[input.position() as usize];
+                        let _ = input.seek_relative(1);
                     }
                     c += 1;
                 }
@@ -52,8 +52,8 @@ pub mod bpe {
             }
             
             // calculate packed data block size
-            let size = 256 * seeker.get_ref()[seeker.position() as usize] as i16 + seeker.get_ref()[seeker.position() as usize + 1] as i16;
-            let _ = seeker.seek_relative(2);
+            let size = 256 * input.get_ref()[input.position() as usize] as i16 + input.get_ref()[input.position() as usize + 1] as i16;
+            let _ = input.seek_relative(2);
     
             // unpack data block
             let mut i = 0;
@@ -66,8 +66,8 @@ pub mod bpe {
                     c = stack[i];
                 } else {
                     current_size -= 1;
-                    c = seeker.get_ref()[seeker.position() as usize];
-                    let _ = seeker.seek_relative(1);
+                    c = input.get_ref()[input.position() as usize];
+                    let _ = input.seek_relative(1);
                 }
     
                 // output byte or push pair on stack
