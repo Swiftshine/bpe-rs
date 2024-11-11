@@ -1,7 +1,7 @@
 pub mod bpe {
     /// Code based on 1994 Philip Gage
 
-    use std::io::{Cursor, Seek};
+    use std::io::{Cursor, Read, Seek};
 
     pub const DEFAULT_STACK_SIZE: usize = 30;
 
@@ -89,6 +89,7 @@ pub mod bpe {
     const HASHSIZE: usize = 8192;
     const _MAXCHARS: usize = 220;
     const _THRESHOLD: usize = 3;
+    const EOF: i32 = -1;
 
     static mut ENC_BUFFER: [u8; BLOCKSIZE] = [0u8; BLOCKSIZE];
     static mut ENC_LEFTCODE: [u8; 256] = [0u8; 256];
@@ -102,7 +103,7 @@ pub mod bpe {
         let c;
         
         if file.position() as usize >= file.get_ref().len() {
-            c = -(1i32);
+            c = EOF;
         } else {
             c = file.get_ref()[file.position() as usize] as i32;
             let _ = file.seek_relative(1);
@@ -156,7 +157,7 @@ pub mod bpe {
         while ENC_SIZE < bs && used < mc
             && {
                 c = getc(input);
-                c != -(1 as i32)
+                c != EOF
             }
         {
             if ENC_SIZE > 0 {
@@ -181,7 +182,7 @@ pub mod bpe {
         }
 
 
-        c == -(1i32)
+        c == EOF
     }
 
     unsafe fn filewrite(file: &mut Vec<u8>) {
@@ -211,10 +212,10 @@ pub mod bpe {
                 len = 0;
                 c += 1;
 
-                while len < 127 && c < 256
-                    && c != ENC_LEFTCODE[c as usize] as i32
-                    || len < 125 && c < 254 
-                    && c + 1 != ENC_LEFTCODE[(c + 1) as usize] as i32
+                while (len < 127 && c < 256
+                    && c != ENC_LEFTCODE[c as usize] as i32)
+                    || (len < 125 && c < 254 
+                    && c + 1 != ENC_LEFTCODE[(c + 1) as usize] as i32)
                 {
                     len += 1;
                     c += 1;
