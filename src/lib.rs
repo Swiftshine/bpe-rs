@@ -115,7 +115,7 @@ pub mod bpe {
     unsafe fn lookup(a: u8, b: u8, hs: i32) -> i32 {
         let mut index;
 
-        index = (a as i32 ^ ((b << 5) as i32)) as i32 & (hs - 1 as i32);
+        index = (a as i32 ^ (b as i32) << 5) as i32 & (hs - 1 as i32);
 
 
         while (ENC_LEFT[index as usize] as i32 != a as i32
@@ -131,7 +131,12 @@ pub mod bpe {
         index
     }
 
-    unsafe fn fileread(input: &mut Cursor<&[u8]>, bs: i32, hs: i32, mc: i32) -> bool {
+    unsafe fn fileread(
+        input: &mut Cursor<&[u8]>,
+        bs: i32,
+        hs: i32,
+        mc: i32
+    ) -> bool {
         let mut index;
         let mut used = 0i32;
         
@@ -151,7 +156,6 @@ pub mod bpe {
         while ENC_SIZE < bs && used < mc
             && {
                 c = getc(input);
-
                 c != -(1 as i32)
             }
         {
@@ -191,7 +195,7 @@ pub mod bpe {
                 
                 while len < 127 && c < 256
                     && c == ENC_LEFTCODE[c as usize] as i32 
-                    {
+                {
                     len += 1;
                     c += 1;
                 }
@@ -202,6 +206,7 @@ pub mod bpe {
                 if c == 256 {
                     break;
                 }
+                
             } else {
                 len = 0;
                 c += 1;
@@ -232,19 +237,6 @@ pub mod bpe {
 
         file.push((ENC_SIZE / 256) as u8);
         file.push((ENC_SIZE % 256) as u8);
-
-        // file.extend_from_slice(enc_buffer);
-        // file.extend(enc_buffer);
-
-        // for byte in ENC_BUFFER {
-        //     file.push(byte);
-        // }
-
-        // file.extend(ENC_BUFFER[0..ENC_SIZE as usize]);
-
-        // for i in 0..ENC_SIZE {
-        //     file.push(ENC_BUFFER[i as usize]);
-        // }
 
         file.extend_from_slice(&ENC_BUFFER[..ENC_SIZE as usize]);
     }
@@ -302,7 +294,7 @@ pub mod bpe {
                         break;
                     }
 
-                    let oldsize = ENC_SIZE - 1 as i32;
+                    let oldsize = ENC_SIZE - 1;
                     let mut w = 0i32;
                     let mut r = 0i32;
 
@@ -312,7 +304,7 @@ pub mod bpe {
                         {
                             if r > 0 {
                                 index = lookup(
-                                    ENC_BUFFER[(w - 1 as i32) as usize],
+                                    ENC_BUFFER[(w - 1) as usize],
                                     leftch as u8,
                                     hs
                                 );
@@ -322,7 +314,7 @@ pub mod bpe {
                                 }
 
                                 index = lookup(
-                                    ENC_BUFFER[(w - 1 as i32) as usize],
+                                    ENC_BUFFER[(w - 1) as usize],
                                     code as u8,
                                     hs
                                 );
@@ -332,10 +324,10 @@ pub mod bpe {
                                 }
                             }
 
-                            if r < oldsize - 1 as i32 {
+                            if r < oldsize - 1 {
                                 index = lookup(
                                     rightch as u8,
-                                    ENC_BUFFER[(r + 2 as i32) as usize],
+                                    ENC_BUFFER[(r + 2) as usize],
                                     hs
                                 );
 
@@ -345,7 +337,7 @@ pub mod bpe {
 
                                 index = lookup(
                                     code as u8,
-                                    ENC_BUFFER[(r + 2 as i32) as usize],
+                                    ENC_BUFFER[(r + 2) as usize],
                                     hs
                                 );
 
