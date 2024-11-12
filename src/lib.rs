@@ -19,6 +19,8 @@ pub mod bpe {
     }
 
     /// Adapted from Philip Gage's `expand` function.
+    /// 
+    /// For `stack_size`, it's recommended to use `DEFAULT_STACK_SIZE`.
     pub fn decode(input: &[u8], stack_size: usize) -> Vec<u8> {
         let mut input = Cursor::new(input);
         let mut output = Vec::new();

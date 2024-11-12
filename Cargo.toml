@@ -1,7 +1,13 @@
 [package]
 name = "bpe-rs"
+license = "MIT"
 version = "0.1.0"
 edition = "2021"
+description = "bpe-rs is an implementation of Philip Gage's Byte Pair Encoding in Rust, primarily used for binary file compression and decompression."
+repository = "https://github.com/Swiftshine/bpe-rs"
+readme = "README.md"
+exclude = ["/test_files"]
+keywords = ["bpe", "compression"]
 
-[dependencies]
+[dev-dependencies]
 anyhow = "1.0.93"
