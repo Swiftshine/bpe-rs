@@ -381,3 +381,25 @@ pub mod bpe {
     
     
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+
+    #[test]
+    fn check_encode() {
+        let target = fs::read("test_files/ferris-encoded.bin").unwrap();
+        let source = fs::read("test_files/ferris.png").unwrap();
+        
+        assert_eq!(target, bpe::encode(&source));
+    }
+
+    #[test]
+    fn check_decode() {
+        let target = fs::read("test_files/ferris.png").unwrap();
+        let source = fs::read("test_files/ferris-encoded.bin").unwrap();
+
+        assert_eq!(target, bpe::decode(&source, bpe::DEFAULT_STACK_SIZE));
+    }
+}
