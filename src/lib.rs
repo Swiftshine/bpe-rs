@@ -2,86 +2,105 @@ pub mod bpe {
     /// Code based on 1994 Philip Gage
 
     use std::io::{Cursor, Seek};
+    
+    pub const DEFAULT_STACK_SIZE: usize = 5000;
 
-    pub const DEFAULT_STACK_SIZE: usize = 30;
+    fn getc(file: &mut Cursor<&[u8]>) -> i32 {
+        let c;
+        
+        if file.position() as usize >= file.get_ref().len() {
+            c = EOF;
+        } else {
+            c = file.get_ref()[file.position() as usize] as i32;
+            let _ = file.seek_relative(1);
+        }
+
+        c
+    }
 
     /// Adapted from Philip Gage's `expand` function.
     pub fn decode(input: &[u8], stack_size: usize) -> Vec<u8> {
         let mut input = Cursor::new(input);
-        
+        let mut output = Vec::new();
+
         let mut left = [0u8; 256];
         let mut right = [0u8; 256];
         let mut stack = vec![0u8; stack_size];
-        let mut output = Vec::new();
-    
-        while input.position() < input.get_ref().len() as u64 {
-            // set left to itself as literal flag
-            for i in 0..256 {
-                left[i] = i as u8;
+
+
+        let mut count: u16;
+        let mut c: u16;
+        
+        loop {
+            count = getc(&mut input) as u16;
+
+            if count == EOF as u16 {
+                break;
             }
-    
-            // read pair table
-            let mut c = 0;
-            while c < 256 {
-                let mut count = input.get_ref()[input.position() as usize] as i16;
-                let _ = input.seek_relative(1);
-    
-                // skip range of literal bytes
+
+            for i in 0..256 {
+                left[i as usize] = i as u8;
+            }
+
+            c = 0u16;
+            loop {
                 if count > 127 {
                     c += count - 127;
                     count = 0;
                 }
+
                 if c == 256 {
                     break;
                 }
-    
-                // read pairs, skip right if literal
-                for _ in 0..=count {
-                    left[c as usize] = input.get_ref()[input.position() as usize];
-                    let _ = input.seek_relative(1);
 
-                    if c != left[c as usize] as i16 {
-                        right[c as usize] = input.get_ref()[input.position() as usize];
-                        let _ = input.seek_relative(1);
+                for _ in 0..=count {         
+                    left[c as usize] = getc(&mut input) as u8;
+                    if c != left[c as usize] as u16 {
+                        right[c as usize] = getc(&mut input) as u8;
                     }
                     c += 1;
                 }
+
                 if c == 256 {
                     break;
                 }
-            }
-            
-            // calculate packed data block size
-            let size = 256 * input.get_ref()[input.position() as usize] as i16 + input.get_ref()[input.position() as usize + 1] as i16;
-            let _ = input.seek_relative(2);
-    
-            // unpack data block
-            let mut i = 0;
-            let mut current_size = size;
 
-            while current_size > 0 {
-                let c;
-                if i > 0 {
+                count = getc(&mut input) as u16;
+            }
+
+            let mut size = 256 * getc(&mut input) + getc(&mut input);
+
+            let mut i = 0;
+
+            loop {
+                if i != 0 {
                     i -= 1;
-                    c = stack[i];
+                    c = stack[i as usize] as u16;
                 } else {
-                    current_size -= 1;
-                    c = input.get_ref()[input.position() as usize];
-                    let _ = input.seek_relative(1);
+                    let temp = size;
+                    size -= 1;
+
+                    if temp == 0 {
+                        break;
+                    }
+
+                    c = getc(&mut input) as u16;
                 }
-    
-                // output byte or push pair on stack
-                if c == left[c as usize] {
-                    output.push(c);
+
+                if c == left[c as usize] as u16 {
+                    output.push(c as u8);
                 } else {
-                    stack[i] = right[c as usize];
+                    let temp = i;
                     i += 1;
-                    stack[i] = left[c as usize];
+                    stack[temp as usize] = right[c as usize];
+                    
+                    let temp = i;
                     i += 1;
+                    stack[temp as usize] = left[c as usize];
                 }
             }
-        }
-    
+        };
+
         output
     }
 
@@ -98,19 +117,6 @@ pub mod bpe {
     static mut ENC_LEFT: [u8; HASHSIZE] = [0u8; HASHSIZE];
     static mut ENC_RIGHT: [u8; HASHSIZE] = [0u8; HASHSIZE];
     static mut ENC_SIZE: i32 = 0;
-
-    fn getc(file: &mut Cursor<&[u8]>) -> i32 {
-        let c;
-        
-        if file.position() as usize >= file.get_ref().len() {
-            c = EOF;
-        } else {
-            c = file.get_ref()[file.position() as usize] as i32;
-            let _ = file.seek_relative(1);
-        }
-
-        c
-    }
 
 
     unsafe fn lookup(a: u8, b: u8, hs: i32) -> i32 {
