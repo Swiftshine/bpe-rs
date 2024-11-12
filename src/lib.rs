@@ -1,7 +1,7 @@
 pub mod bpe {
     /// Code based on 1994 Philip Gage
 
-    use std::io::{Cursor, Read, Seek};
+    use std::io::{Cursor, Seek};
 
     pub const DEFAULT_STACK_SIZE: usize = 30;
 
