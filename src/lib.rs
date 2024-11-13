@@ -1,9 +1,12 @@
 pub mod bpe {
     /// Code based on 1994 Philip Gage
-
+    
     use std::io::{Cursor, Seek};
     
+    /// The recommended "stack" size for decoding.
     pub const DEFAULT_STACK_SIZE: usize = 5000;
+    
+    const EOF: i32 = -1;
 
     fn getc(file: &mut Cursor<&[u8]>) -> i32 {
         let c;
@@ -20,7 +23,12 @@ pub mod bpe {
 
     /// Adapted from Philip Gage's `expand` function.
     /// 
-    /// For `stack_size`, it's recommended to use `DEFAULT_STACK_SIZE`.
+    /// ### Parameters
+    /// `input`: The data to be decoded.
+    /// `stack_size`: The size of the "stack" for decoding.
+    /// 
+    /// ### Returns
+    /// A `Vec<u8>` of the decoded data.
     pub fn decode(input: &[u8], stack_size: usize) -> Vec<u8> {
         let mut input = Cursor::new(input);
         let mut output = Vec::new();
@@ -28,7 +36,6 @@ pub mod bpe {
         let mut left = [0u8; 256];
         let mut right = [0u8; 256];
         let mut stack = vec![0u8; stack_size];
-
 
         let mut count: u16;
         let mut c: u16;
@@ -110,7 +117,6 @@ pub mod bpe {
     const HASHSIZE: usize = 8192;
     const _MAXCHARS: usize = 220;
     const _THRESHOLD: usize = 3;
-    const EOF: i32 = -1;
 
     static mut ENC_BUFFER: [u8; BLOCKSIZE] = [0u8; BLOCKSIZE];
     static mut ENC_LEFTCODE: [u8; 256] = [0u8; 256];
@@ -251,6 +257,12 @@ pub mod bpe {
     }
 
     /// Adapted from Philip Gage's `compress` function.
+    /// 
+    /// ### Parameters
+    /// `input`: The data to be encoded.
+    /// 
+    /// ### Returns
+    /// A `Vec<u8>` of the encoded data.
     pub fn encode(input: &[u8]) -> Vec<u8> {
         let mut input = Cursor::new(input);
 
