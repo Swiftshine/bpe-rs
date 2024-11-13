@@ -8,6 +8,3 @@ repository = "https://github.com/Swiftshine/bpe-rs"
 readme = "README.md"
 exclude = ["/test_files"]
 keywords = ["bpe", "compression"]
-
-[dev-dependencies]
-anyhow = "1.0.93"
