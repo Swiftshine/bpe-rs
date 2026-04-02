@@ -6,5 +6,5 @@ edition = "2021"
 description = "bpe-rs is an implementation of Philip Gage's Byte Pair Encoding in Rust, primarily used for binary file compression and decompression."
 repository = "https://github.com/Swiftshine/bpe-rs"
 readme = "README.md"
-exclude = ["/test_files"]
+exclude = ["/test_files", "/src/bin"]
 keywords = ["bpe", "compression"]

@@ -1,18 +1,22 @@
-use std::{fs, env};
-use anyhow::{bail, Result};
+use std::{fs, env, process, error};
 use bpe_rs::bpe;
 
-fn main() -> Result<()> {
+fn bail(string: &str) {
+    println!("{}", string);
+    process::exit(1);
+}
+
+fn main() -> Result<(), Box <dyn error::Error>> {
     let args: Vec<String> = env::args().collect();
 
     if args.len() != 4 {
-        bail!("Command should be: <executable> <encode/decode> <input> <output>");
+        bail("Command should be: <executable> <encode/decode> <input> <output>");
     }
 
     let usage = args.get(1).unwrap();
 
     if usage != "decode" && usage != "encode" {
-        bail!("Usage must be encode or decode");
+        bail("Usage must be encode or decode");
     }
 
 
