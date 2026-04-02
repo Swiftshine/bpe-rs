@@ -1,16 +1,15 @@
 pub mod bpe {
     /// Code based on 1994 Philip Gage
-    
     use std::io::{Cursor, Seek};
-    
+
     /// The recommended "stack" size for decoding.
     pub const DEFAULT_STACK_SIZE: usize = 5000;
-    
+
     const EOF: i32 = -1;
 
     fn getc(file: &mut Cursor<&[u8]>) -> i32 {
         let c;
-        
+
         if file.position() as usize >= file.get_ref().len() {
             c = EOF;
         } else {
@@ -22,11 +21,11 @@ pub mod bpe {
     }
 
     /// Adapted from Philip Gage's `expand` function.
-    /// 
+    ///
     /// ### Parameters
     /// `input`: The data to be decoded.
     /// `stack_size`: The size of the "stack" for decoding.
-    /// 
+    ///
     /// ### Returns
     /// A `Vec<u8>` of the decoded data.
     pub fn decode(input: &[u8], stack_size: usize) -> Vec<u8> {
@@ -39,7 +38,7 @@ pub mod bpe {
 
         let mut count: u16;
         let mut c: u16;
-        
+
         loop {
             count = getc(&mut input) as u16;
 
@@ -62,7 +61,7 @@ pub mod bpe {
                     break;
                 }
 
-                for _ in 0..=count {         
+                for _ in 0..=count {
                     left[c as usize] = getc(&mut input) as u8;
                     if c != left[c as usize] as u16 {
                         right[c as usize] = getc(&mut input) as u8;
@@ -102,168 +101,176 @@ pub mod bpe {
                     let temp = i;
                     i += 1;
                     stack[temp as usize] = right[c as usize];
-                    
+
                     let temp = i;
                     i += 1;
                     stack[temp as usize] = left[c as usize];
                 }
             }
-        };
+        }
 
         output
     }
 
-    const BLOCKSIZE: usize = 10_000;
-    const HASHSIZE: usize = 8192;
+    struct Encoder {
+        buffer: [u8; BLOCKSIZE],
+        leftcode: [u8; 256],
+        rightcode: [u8; 256],
+        count: [u8; HASHSIZE],
+        left: [u8; HASHSIZE],
+        right: [u8; HASHSIZE],
+        size: i32,
+    }
+
+    // const BLOCKSIZE: usize = 10_000;
+    const BLOCKSIZE: usize = 65536;
+    // const HASHSIZE: usize = 8192;
+    const HASHSIZE: usize = 65536;
     const _MAXCHARS: usize = 220;
     const _THRESHOLD: usize = 3;
 
-    static mut ENC_BUFFER: [u8; BLOCKSIZE] = [0u8; BLOCKSIZE];
-    static mut ENC_LEFTCODE: [u8; 256] = [0u8; 256];
-    static mut ENC_RIGHTCODE: [u8; 256] = [0u8; 256];
-    static mut ENC_COUNT: [u8; HASHSIZE] = [0u8; HASHSIZE];
-    static mut ENC_LEFT: [u8; HASHSIZE] = [0u8; HASHSIZE];
-    static mut ENC_RIGHT: [u8; HASHSIZE] = [0u8; HASHSIZE];
-    static mut ENC_SIZE: i32 = 0;
 
-
-    unsafe fn lookup(a: u8, b: u8, hs: i32) -> i32 {
-        let mut index;
-
-        index = (a as i32 ^ (b as i32) << 5) as i32 & (hs - 1 as i32);
-
-
-        while (ENC_LEFT[index as usize] as i32 != a as i32
-            || ENC_RIGHT[index as usize] as i32 != b as i32)
-            && ENC_COUNT[index as usize] as i32 != 0 
-        {
-            index = (index + 1) & (hs - 1);
+    impl Encoder {
+        fn new() -> Self {
+            Self {
+                buffer: [0; BLOCKSIZE],
+                leftcode: [0; 256],
+                rightcode: [0; 256],
+                count: [0; HASHSIZE],
+                left: [0; HASHSIZE],
+                right: [0; HASHSIZE],
+                size: 0,
+            }
         }
 
-        ENC_LEFT[index as usize] = a;
-        ENC_RIGHT[index as usize] = b;
+        unsafe fn lookup(&mut self, a: u8, b: u8, hs: i32) -> i32 {
+            let mut index;
 
-        index
-    }
+            index = (a as i32 ^ (b as i32) << 5) as i32 & (hs - 1 as i32);
 
-    unsafe fn fileread(
-        input: &mut Cursor<&[u8]>,
-        bs: i32,
-        hs: i32,
-        mc: i32
-    ) -> bool {
-        let mut index;
-        let mut used = 0i32;
-        
-        for c in 0..hs {
-            ENC_COUNT[c as usize] = 0;
+            while (self.left[index as usize] as i32 != a as i32
+                || self.right[index as usize] as i32 != b as i32)
+                && self.count[index as usize] as i32 != 0
+            {
+                index = (index + 1) & (hs - 1);
+            }
+
+            self.left[index as usize] = a;
+            self.right[index as usize] = b;
+
+            index
         }
 
-        for c in 0..256 {
-            ENC_LEFTCODE[c as usize] = c as u8;
-            ENC_RIGHTCODE[c as usize] = 0;
-        }
-        
-        
-        let mut c = 0i32;
-        ENC_SIZE = 0;
-        
-        while ENC_SIZE < bs && used < mc
-            && {
+        unsafe fn fileread(
+            &mut self,
+            input: &mut Cursor<&[u8]>,
+            bs: i32,
+            hs: i32,
+            mc: i32,
+        ) -> bool {
+            let mut index;
+            let mut used = 0i32;
+
+            for c in 0..hs {
+                self.count[c as usize] = 0;
+            }
+
+            for c in 0..256 {
+                self.leftcode[c as usize] = c as u8;
+                self.rightcode[c as usize] = 0;
+            }
+
+            let mut c = 0i32;
+            self.size = 0;
+
+            while self.size < bs && used < mc && {
                 c = getc(input);
                 c != EOF
-            }
-        {
-            if ENC_SIZE > 0 {
-                index = lookup(
-                    ENC_BUFFER[(ENC_SIZE - 1 as i32) as usize],
-                    c as u8,
-                    hs
-                );
+            } {
+                if self.size > 0 {
+                    index = self.lookup(self.buffer[(self.size - 1 as i32) as usize], c as u8, hs);
 
-                if (ENC_COUNT[index as usize] as i32) < 255 {
-                    ENC_COUNT[index as usize] = (ENC_COUNT[index as usize]).wrapping_add(1);
+                    if (self.count[index as usize] as i32) < 255 {
+                        self.count[index as usize] = (self.count[index as usize]).wrapping_add(1);
+                    }
+                }
+
+                self.buffer[self.size as usize] = c as u8;
+                self.size += 1;
+
+                if self.rightcode[c as usize] == 0 {
+                    self.rightcode[c as usize] = 1;
+                    used += 1;
                 }
             }
 
-            ENC_BUFFER[ENC_SIZE as usize] = c as u8;
-            ENC_SIZE += 1;
-
-            if ENC_RIGHTCODE[c as usize] == 0 {
-                ENC_RIGHTCODE[c as usize] = 1;
-                used += 1;
-            }
+            c == EOF
         }
 
-
-        c == EOF
-    }
-
-    unsafe fn filewrite(file: &mut Vec<u8>) {
-        let mut len;
-        let mut c = 0i32;
-
-        while c < 256 {
-            if c == ENC_LEFTCODE[c as usize] as i32 {
-                len = 1;
-                c += 1;
-                
-                while len < 127 && c < 256
-                    && c == ENC_LEFTCODE[c as usize] as i32 
-                {
-                    len += 1;
+        unsafe fn filewrite(&self, file: &mut Vec<u8>) {
+            let mut len;
+            let mut c = 0i32;
+    
+            while c < 256 {
+                if c == self.leftcode[c as usize] as i32 {
+                    len = 1;
+                    c += 1;
+    
+                    while len < 127 && c < 256 && c == self.leftcode[c as usize] as i32 {
+                        len += 1;
+                        c += 1;
+                    }
+    
+                    file.push((len + 127) as u8);
+                    len = 0;
+    
+                    if c == 256 {
+                        break;
+                    }
+                } else {
+                    len = 0;
+                    c += 1;
+    
+                    while (len < 127 && c < 256 && c != self.leftcode[c as usize] as i32)
+                        || (len < 125 && c < 254 && c + 1 != self.leftcode[(c + 1) as usize] as i32)
+                    {
+                        len += 1;
+                        c += 1;
+                    }
+    
+                    file.push(len as u8);
+                    c -= len + 1;
+                }
+    
+                for _ in 0..=len {
+                    file.push(self.leftcode[c as usize]);
+    
+                    if c != self.leftcode[c as usize] as i32 {
+                        file.push(self.rightcode[c as usize])
+                    }
+    
                     c += 1;
                 }
-                
-                file.push((len + 127) as u8);
-                len = 0;
-
-                if c == 256 {
-                    break;
-                }
-                
-            } else {
-                len = 0;
-                c += 1;
-
-                while (len < 127 && c < 256
-                    && c != ENC_LEFTCODE[c as usize] as i32)
-                    || (len < 125 && c < 254 
-                    && c + 1 != ENC_LEFTCODE[(c + 1) as usize] as i32)
-                {
-                    len += 1;
-                    c += 1;
-                }
-
-                file.push(len as u8);
-                c -= len + 1;
             }
-
-            for _ in 0..=len {
-                file.push(ENC_LEFTCODE[c as usize]);
-
-                if c != ENC_LEFTCODE[c as usize] as i32 {
-                    file.push(ENC_RIGHTCODE[c as usize])
-                }
-
-                c += 1;
-            }
+    
+            file.push((self.size / 256) as u8);
+            file.push((self.size % 256) as u8);
+    
+            file.extend_from_slice(&self.buffer[..self.size as usize]);
         }
-
-        file.push((ENC_SIZE / 256) as u8);
-        file.push((ENC_SIZE % 256) as u8);
-
-        file.extend_from_slice(&ENC_BUFFER[..ENC_SIZE as usize]);
     }
+
 
     /// Adapted from Philip Gage's `compress` function.
-    /// 
+    ///
     /// ### Parameters
     /// `input`: The data to be encoded.
-    /// 
+    ///
     /// ### Returns
     /// A `Vec<u8>` of the encoded data.
     pub fn encode(input: &[u8]) -> Vec<u8> {
+        let mut encoder = Box::new(Encoder::new());
+
         let mut input = Cursor::new(input);
 
         let (bs, hs, mc, th) = (8192, 4096, 200, 3);
@@ -276,17 +283,17 @@ pub mod bpe {
         unsafe {
             let mut done = false;
             while !done {
-                done = fileread(&mut input, bs, hs, mc);
+                done = encoder.fileread(&mut input, bs, hs, mc);
                 code = 256;
-                
+
                 // compress this block
                 loop {
                     // get next unused char for pair code
                     code -= 1;
-                    
+
                     while code >= 0 {
-                        if code == ENC_LEFTCODE[code as usize] as i32
-                            && ENC_RIGHTCODE[code as usize] == 0
+                        if code == encoder.leftcode[code as usize] as i32
+                            && encoder.rightcode[code as usize] == 0
                         {
                             break;
                         }
@@ -302,10 +309,10 @@ pub mod bpe {
                     let mut index = 0;
 
                     while index < hs {
-                        if ENC_COUNT[index as usize] as i32 > best {
-                            best = ENC_COUNT[index as usize] as i32;
-                            leftch = ENC_LEFT[index as usize] as i32;
-                            rightch = ENC_RIGHT[index as usize] as i32;
+                        if encoder.count[index as usize] as i32 > best {
+                            best = encoder.count[index as usize] as i32;
+                            leftch = encoder.left[index as usize] as i32;
+                            rightch = encoder.right[index as usize] as i32;
                         }
 
                         index += 1;
@@ -315,85 +322,71 @@ pub mod bpe {
                         break;
                     }
 
-                    let oldsize = ENC_SIZE - 1;
+                    let oldsize = encoder.size - 1;
                     let mut w = 0i32;
                     let mut r = 0i32;
 
                     while r < oldsize {
-                        if ENC_BUFFER[r as usize] as i32 == leftch
-                            && ENC_BUFFER[(r + 1 as i32) as usize] as i32 == rightch
+                        if encoder.buffer[r as usize] as i32 == leftch
+                            && encoder.buffer[(r + 1 as i32) as usize] as i32 == rightch
                         {
                             if r > 0 {
-                                index = lookup(
-                                    ENC_BUFFER[(w - 1) as usize],
-                                    leftch as u8,
-                                    hs
-                                );
+                                index = encoder.lookup(encoder.buffer[(w - 1) as usize], leftch as u8, hs);
 
-                                if ENC_COUNT[index as usize] as i32 > 1 {
-                                    ENC_COUNT[index as usize] = (ENC_COUNT[index as usize]).wrapping_sub(1);
+                                if encoder.count[index as usize] as i32 > 1 {
+                                    encoder.count[index as usize] =
+                                        (encoder.count[index as usize]).wrapping_sub(1);
                                 }
 
-                                index = lookup(
-                                    ENC_BUFFER[(w - 1) as usize],
-                                    code as u8,
-                                    hs
-                                );
+                                index = encoder.lookup(encoder.buffer[(w - 1) as usize], code as u8, hs);
 
-                                if (ENC_COUNT[index as usize] as i32) < 255 {
-                                    ENC_COUNT[index as usize] = (ENC_COUNT[index as usize]).wrapping_add(1);
+                                if (encoder.count[index as usize] as i32) < 255 {
+                                    encoder.count[index as usize] =
+                                        (encoder.count[index as usize]).wrapping_add(1);
                                 }
                             }
 
                             if r < oldsize - 1 {
-                                index = lookup(
-                                    rightch as u8,
-                                    ENC_BUFFER[(r + 2) as usize],
-                                    hs
-                                );
+                                index = encoder.lookup(rightch as u8, encoder.buffer[(r + 2) as usize], hs);
 
-                                if ENC_COUNT[index as usize] as i32 > 1 {
-                                    ENC_COUNT[index as usize] = (ENC_COUNT[index as usize]).wrapping_sub(1);
+                                if encoder.count[index as usize] as i32 > 1 {
+                                    encoder.count[index as usize] =
+                                        (encoder.count[index as usize]).wrapping_sub(1);
                                 }
 
-                                index = lookup(
-                                    code as u8,
-                                    ENC_BUFFER[(r + 2) as usize],
-                                    hs
-                                );
+                                index = encoder.lookup(code as u8, encoder.buffer[(r + 2) as usize], hs);
 
-                                if (ENC_COUNT[index as usize] as i32) < 255 {
-                                    ENC_COUNT[index as usize] = (ENC_COUNT[index as usize]).wrapping_add(1);
+                                if (encoder.count[index as usize] as i32) < 255 {
+                                    encoder.count[index as usize] =
+                                        (encoder.count[index as usize]).wrapping_add(1);
                                 }
                             }
 
-                            ENC_BUFFER[w as usize] = code as u8;
+                            encoder.buffer[w as usize] = code as u8;
                             w += 1;
                             r += 1;
-                            ENC_SIZE -= 1;
+                            encoder.size -= 1;
                         } else {
-                            ENC_BUFFER[w as usize] = ENC_BUFFER[r as usize];
+                            encoder.buffer[w as usize] = encoder.buffer[r as usize];
                             w += 1;
                         }
 
                         r += 1;
                     }
 
-                    ENC_BUFFER[w as usize] = ENC_BUFFER[r as usize];
-                    ENC_LEFTCODE[code as usize] = leftch as u8;
-                    ENC_RIGHTCODE[code as usize] = rightch as u8;
-                    index = lookup(leftch as u8, rightch as u8, hs);
-                    ENC_COUNT[index as usize] = 1 as i32 as u8;
+                    encoder.buffer[w as usize] = encoder.buffer[r as usize];
+                    encoder.leftcode[code as usize] = leftch as u8;
+                    encoder.rightcode[code as usize] = rightch as u8;
+                    index = encoder.lookup(leftch as u8, rightch as u8, hs);
+                    encoder.count[index as usize] = 1 as i32 as u8;
                 }
 
-                filewrite(&mut output);
+                encoder.filewrite(&mut output);
             }
         }
 
         output
     }
-    
-    
 }
 
 #[cfg(test)]
@@ -402,17 +395,33 @@ mod tests {
     use std::fs;
 
     #[test]
-    fn check_encode() {
+    fn check_encode1() {
         let target = fs::read("test_files/ferris-encoded.bin").unwrap();
         let source = fs::read("test_files/ferris.png").unwrap();
-        
+
         assert_eq!(target, bpe::encode(&source));
     }
 
     #[test]
-    fn check_decode() {
+    fn check_decode1() {
         let target = fs::read("test_files/ferris.png").unwrap();
         let source = fs::read("test_files/ferris-encoded.bin").unwrap();
+
+        assert_eq!(target, bpe::decode(&source, bpe::DEFAULT_STACK_SIZE));
+    }
+
+    #[test]
+    fn check_encode2() {
+        let target = fs::read("test_files/picture-encoded.bin").unwrap();
+        let source = fs::read("test_files/picture.jpg").unwrap();
+
+        assert_eq!(target, bpe::encode(&source));
+    }
+
+    #[test]
+    fn check_decode2() {
+        let target = fs::read("test_files/picture.jpg").unwrap();
+        let source = fs::read("test_files/picture-encoded.bin").unwrap();
 
         assert_eq!(target, bpe::decode(&source, bpe::DEFAULT_STACK_SIZE));
     }
