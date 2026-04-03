@@ -17,3 +17,6 @@ let decoded = bpe::decode(&encoded, bpe::DEFAULT_STACK_SIZE);
 let decoded = fs::read("decoded_file.txt")?;
 let encoded = bpe::encode(&decoded);
 ```
+
+> [!WARNING]
+> Large files may take a long time to compress.
