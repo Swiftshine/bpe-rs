@@ -8,3 +8,9 @@ repository = "https://github.com/Swiftshine/bpe-rs"
 readme = "README.md"
 exclude = ["/test_files", "/src/bin"]
 keywords = ["bpe", "compression"]
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+panic = "abort"

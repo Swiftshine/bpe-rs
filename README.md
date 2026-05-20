@@ -19,4 +19,4 @@ let encoded = bpe::encode(&decoded);
 ```
 
 > [!WARNING]
-> Large files may take a long time to compress.
+> Large files may take a long time to operate on.
